@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+
+<button id="Testing" onclick="actionShow()">Testing </button>
+
+</body>
+
+<script>
+
+    let smart_link_block = "https://yahoo.com";
+    let smart_link_allow = "https://yahoo.com";
+
+
+    let version = "2";
+    let searchParams = new URLSearchParams(window.location.search);
+
+    let clickID = searchParams.get("utm_source1");
+    let source = searchParams.get("utm_source2");
+
+    var fallback_url = "https://yahoo.com";
+    fallback_url = fallback_url.replace("[SUB_ID]", searchParams.get("utm_source2"));
+    if (navigator.webdriver === true) {
+        window.location = fallback_url;
+    }
+    var ad = {};
+    var cpc = 0;
+    var o_eid = null;
+    var o_ocid = null;
+
+    function getOCP(o_url) {
+        try {
+            let params = new URLSearchParams(o_url);
+            let l2 = params.get('l2');
+            if (l2) {
+                return l2;
+            } else return null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    fetchAd();
+    if (!isPushApiSupported() || !Notification) {
+        goToRedirect();
+    }
+    if (Notification && Notification.permission !== "default") {
+        goToRedirect();
+    }
+
+    const domain_name = window.location.hostname;
+    let final_endpoint = "https://" + domain_name + "/hood/" + btoa(domain_name) + "/conf.json";
+
+    function fetchAd() {
+        var source = searchParams.get("utm_source2") ? "?subid=" + searchParams.get("utm_source2") : "?subid=";
+        var random_uid = uuidv4();
+        fetch("https://feed.cn-rtb.com/v1/native/AFU1kAAPatM" + source + "&uid=" + random_uid + "&kw=download%20install").then(function (res) {
+            return res.json();
+        }).then(function (res) {
+            var items = res.items;
+            if (items.length > 0) {
+                ad = items[0];
+                cpc = ad.bid;
+                if (ad.hasOwnProperty("eid")) {
+                    o_eid = ad["eid"];
+                }
+                if (ad.hasOwnProperty("url")) {
+                    o_ocid = getOCP(ad["url"]);
+                }
+                return Promise.all(ad.pixels.map(function (t) {
+                    return fetch(t);
+                }))
+            }
+        }).catch(err => console.log('0'));
+    }
+
+    function uuidv4() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    function isPushApiSupported() {
+        return 'PushManager' in window;
+    }
+
+    function goToRedirect() {
+        if (cpc !== 0 && ad.url) {
+            pbcid().then(function () {
+                window.location = ad.url;
+            }).catch(function () {
+                window.location = ad.url;
+            });
+        } else {
+            window.location = smart_link_block;
+        }
+    }
+
+    function goToRedirect2() {
+        if (cpc !== 0 && ad.url) {
+            pbcid().then(function () {
+                window.location = ad.url;
+            }).catch(function () {
+                window.location = ad.url;
+            });
+        } else {
+            window.location = smart_link_allow;
+        }
+    }
+
+    function pbcid() {
+        var clickID = searchParams.get("utm_source1");
+        var cc = searchParams.get("utm_source3");
+        var pb_event_link = "https://data-px.services/?click_id=" + clickID + "&e=" + cpc + "&cc=" + cc + "&p=p2";
+        if (o_eid !== null) {
+            pb_event_link = pb_event_link + "&f=" + String(o_eid);
+        }
+        if (o_ocid !== null) {
+            pb_event_link = pb_event_link + "&l1=" + o_ocid;
+        }
+        return fetch(pb_event_link);
+    }
+
+    function importOmpServiceWorker(omp_push_code, worker_v = "1") {
+        worker_v === "1" ? !function (t, n, e, s, i, o, r) {
+            i = i || "Hood", ("Promise" in this) || (s = s.replace(".js", "-pf.js")), t[i] = t[i] || function () {
+                (t[i].q = t[i].q || []).push(arguments)
+            }, t[i].l = 1 * new Date, o = n.createElement(e), r = n.getElementsByTagName(e) [0], o.async = 1, o.crossOrigin = "anonymous", o.src = s + '?hf=' + i, r.parentNode.insertBefore(o, r)
+        }(window, document, "script", "https://cdn.ocmhood.com/sdk/hood.js") : !function (h, oo, d, y, t, a, g) {
+            h[y] = t[y] || function () {
+                (h[y].q = h[y].q || []).push(arguments)
+            }, h[y].l = 1 * new Date, a = oo.createElement(d), g = oo.getElementsByTagName(d)[0], a.async = 1, a.crossOrigin = "anonymous", a.src = t, g.parentNode.insertBefore(a, g)
+        }(window, document, "script", "Hood", "https://sdk.ocmhood.com/sdk/ht.js?tag=" + omp_push_code);
+    }
+
+    function initOmpServiceWorker(omp_push_code, worker_v = "1") {
+        worker_v === "1" ? Hood('init', omp_push_code, {
+            push: omp_push_code,
+            activity: true
+        }) : Hood('config', "pushserviceworker", "/js/worker.js");
+    }
+
+    function startOmpWorker(omp_push_code, omp_version) {
+
+        importOmpServiceWorker(omp_push_code, omp_version);
+        initOmpServiceWorker(omp_push_code, omp_version);
+
+        Hood('utm', 'ht', omp_push_code);
+        Hood('utm', 'source', source);
+        Hood('utm', 'click', clickID);
+        Hood('event', 'onPushBlock', function () {
+            setTimeout(goToRedirect, 1000);
+        });
+        Hood('event', 'onPushAllow', function () {
+            setTimeout(goToRedirect2, 1000);
+        });
+
+        console.log(omp_push_code)
+        console.log(source)
+        console.log(clickID)
+
+    }
+    
+    startOmpWorker("NjY4ZwSkNAFfmDQ2C-wxNDY4MjE0Nmal", 2);
+
+    function actionShow(){
+        Hood('requestPushPermission');
+    }
+
+</script>
+</html>
+
